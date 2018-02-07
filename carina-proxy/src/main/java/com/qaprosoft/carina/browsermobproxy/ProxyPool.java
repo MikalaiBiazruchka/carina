@@ -15,6 +15,11 @@
  *******************************************************************************/
 package com.qaprosoft.carina.browsermobproxy;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.log4j.Logger;
@@ -24,6 +29,8 @@ import com.qaprosoft.carina.core.foundation.utils.Configuration;
 import com.qaprosoft.carina.core.foundation.utils.Configuration.Parameter;
 import com.qaprosoft.carina.core.foundation.utils.NetworkUtil;
 import com.qaprosoft.carina.core.foundation.utils.R;
+import com.qaprosoft.carina.core.foundation.utils.android.recorder.utils.AdbExecutor;
+import com.qaprosoft.carina.core.foundation.utils.android.recorder.utils.ProcessBuilderExecutor;
 
 import net.lightbody.bmp.BrowserMobProxy;
 import net.lightbody.bmp.BrowserMobProxyServer;
@@ -36,11 +43,10 @@ public final class ProxyPool {
 	// TODO: investigate possibility to return interface to support JettyProxy
 	/**
 	 * create BrowserMobProxy Server object
-	 * @param port number 
 	 * @return BrowserMobProxy
 	 * 
 	 */
-	public static BrowserMobProxy createProxy(int port) {
+	public static BrowserMobProxy createProxy() {
 		BrowserMobProxyServer proxy = new BrowserMobProxyServer();
 		proxy.setTrustAllServers(true);
 		//System.setProperty("jsse.enableSNIExtension", "false");
@@ -105,38 +111,46 @@ public final class ProxyPool {
 	 * 
 	 */
 	public static BrowserMobProxy startProxy() {
-		if (!Configuration.getBoolean(Parameter.BROWSERMOB_PROXY)) {
-			return null;
-		}
-		// integrate browserMob proxy if required here
-		BrowserMobProxy proxy = null;
-		long threadId = Thread.currentThread().getId();
-		if (proxies.containsKey(threadId)) {
-			proxy = proxies.get(threadId);
-		} else {
-			proxy = ProxyPool.createProxy(Configuration.getInt(Parameter.BROWSERMOB_PORT));
-			proxies.put(Thread.currentThread().getId(), proxy);
-		}
-		
-		if (!proxy.isStarted()) {
-			LOGGER.info("Starting BrowserMob proxy...");
-			proxy.start(Configuration.getInt(Parameter.BROWSERMOB_PORT));
-		} else {
-			LOGGER.info("BrowserMob proxy is already started on port " + proxy.getPort());
-		}
-
-		Integer port = proxy.getPort();
-
-		String currentIP = NetworkUtil.getIpAddress();
-		LOGGER.warn("Set http/https proxy settings ONLY to use with BrowserMobProxy host: " + currentIP + "; port: " + port);
-
-		//TODO: double check mobile proxy support
-		R.CONFIG.put("proxy_host", currentIP);
-		R.CONFIG.put("proxy_port", port.toString());
-		R.CONFIG.put("proxy_protocols", "http,https");
-
-		return proxy;
+		return startProxy(Configuration.getInt(Parameter.BROWSERMOB_PORT));
 	}
+	
+	public static BrowserMobProxy startProxy(int proxyPort) {
+        if (!Configuration.getBoolean(Parameter.BROWSERMOB_PROXY)) {
+            return null;
+        }
+        // integrate browserMob proxy if required here
+        BrowserMobProxy proxy = null;
+        long threadId = Thread.currentThread().getId();
+        if (proxies.containsKey(threadId)) {
+            proxy = proxies.get(threadId);
+        } 
+        
+        // case when proxy was already instantiatead but port doesn't correspond to current device
+        if (null == proxy || proxy.getPort() != proxyPort) {
+            proxy = ProxyPool.createProxy();
+            proxies.put(Thread.currentThread().getId(), proxy);
+        }
+        
+        if (!proxy.isStarted()) {
+            LOGGER.info("Starting BrowserMob proxy...");
+            killProcessByPort(proxyPort);
+            proxy.start(proxyPort);
+        } else {
+            LOGGER.info("BrowserMob proxy is already started on port " + proxy.getPort());
+        }
+
+        Integer port = proxy.getPort();
+
+        String currentIP = NetworkUtil.getIpAddress();
+        LOGGER.warn("Set http/https proxy settings ONLY to use with BrowserMobProxy host: " + currentIP + "; port: " + port);
+
+        //TODO: double check mobile proxy support
+        R.CONFIG.put("proxy_host", currentIP);
+        R.CONFIG.put("proxy_port", port.toString());
+        R.CONFIG.put("proxy_protocols", "http,https");
+
+        return proxy;
+    }
 
 	// https://github.com/lightbody/browsermob-proxy/issues/264 'started' flag is not set to false after stopping BrowserMobProxyServer
 	// Due to the above issue we can't control BrowserMob isRunning state and shouldn't stop it
@@ -146,27 +160,49 @@ public final class ProxyPool {
 	 * stop BrowserMobProxy Server
 	 * 
 	 */
-	/*
 	public static void stopProxy() {
 		long threadId = Thread.currentThread().getId();
+		stopProxyByThread(threadId);
+	}
+	
+	/**
+	 * Stop all proxies if possible
+	 */
+	public static void stopAllProxies() {
+        for (Long threadId : Collections.list(proxies.keys())) {
+            stopProxyByThread(threadId);
+        }
+    }
+	
+	/**
+	 * Stop single proxy instance by id
+	 * @param threadId
+	 */
+	private static void stopProxyByThread(long threadId) {
+        LOGGER.debug("stopProxy starting...");
+        if (proxies.containsKey(threadId)) {
+            BrowserMobProxy proxy = proxies.get(threadId);
+            if (proxy != null) {
+                LOGGER.debug("Found registered proxy by thread: " + threadId);
 
-		LOGGER.debug("stopProxy starting...");
-		if (proxies.containsKey(threadId)) {
-			BrowserMobProxy proxy = proxies.get(threadId);
-			if (proxy != null) {
-				LOGGER.debug("Found registered proxy by thread: " + threadId);
-
-				if (proxy.isStarted()) {
-					LOGGER.info("Stopping BrowserMob proxy...");
-					proxy.stop();
-				} else {
-					LOGGER.info("Stopping BrowserMob proxy skipped as it is not started.");
-				}
-			}
-			proxies.remove(threadId);
-		}
-		LOGGER.debug("stopProxy finished...");
-	}*/
+                // isStarted returns true even if proxy was already stopped
+                if (proxy.isStarted()) {
+                    LOGGER.info("Stopping BrowserMob proxy...");
+                    try {
+                        proxy.stop();
+                    } catch (IllegalStateException e) {
+                        LOGGER.info("Seems like proxy was already stopped.");
+                        LOGGER.info(e.getMessage());
+                    }
+                    
+                } else {
+                    LOGGER.info("Stopping BrowserMob proxy skipped as it is not started.");
+                }
+            }
+            proxies.remove(threadId);
+        }
+        LOGGER.debug("stopProxy finished...");
+    }
 
 	/**
 	 * get registered BrowserMobProxy Server
@@ -214,6 +250,32 @@ public final class ProxyPool {
 		LOGGER.info("Register custom proxy with thread: " + threadId);
 		proxies.put(threadId, proxy);
 	}
+	
+	private static void killProcessByPort(int port) {
+	    LOGGER.info(String.format("Process on port %d will be closed.", port));
+	    ProcessBuilderExecutor executor = null;
+        BufferedReader in = null;
+        List<String> output = new ArrayList<String>();
+
+        try {
+            executor = new ProcessBuilderExecutor(String.format("kill $(lsof -t -i:%d)", port));
+
+            Process process = executor.start();
+            in = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line = null;
 
 
+            while ((line = in.readLine()) != null) {
+                output.add(line);
+                LOGGER.debug(line);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e.getMessage(), e);
+        } finally {
+            AdbExecutor.closeQuietly(in);
+            ProcessBuilderExecutor.gcNullSafe(executor);
+        }
+
+	}
+	
 }

@@ -95,9 +95,12 @@ public class MobileFactory extends AbstractFactory
 				} else {
 					throw new RuntimeException("Unsupported mobile capabilities for type: " + driverType + " platform: " + mobilePlatformName);
 				}
-
+				// init port for local run
+				int port = R.CONFIG.getInt(Parameter.BROWSERMOB_PORT.getKey());
+				device.setProxyPort(port);
 			}
 			
+			// selenium hub initialization approach
 			if (device.isNull()) {
 				// TODO: double check that local run with direct appium works fine
 				RemoteDevice remoteDevice = getDeviceInfo(seleniumHost, driver.getSessionId().toString());

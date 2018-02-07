@@ -28,8 +28,9 @@ public class RemoteDevice
 	private String osVersion;
 	private String udid;
 	private String remoteURL;
+	private int proxyPort = -1;
 
-	public String getName()
+    public String getName()
 	{
 		return name;
 	}
@@ -88,4 +89,12 @@ public class RemoteDevice
 	{
 		return type;
 	}
+	
+	public int getProxyPort() {
+        return proxyPort;
+    }
+
+    public void setProxyPort(int proxyPort) {
+        this.proxyPort = proxyPort;
+    }
 }

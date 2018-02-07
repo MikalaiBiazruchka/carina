@@ -71,6 +71,12 @@ public class Device extends RemoteDevice
 		setRemoteURL(remoteURL);
 	}
 	
+	public Device(String name, String type, String os, String osVersion, String udid, String remoteURL, int proxyPort)
+    {
+        this(name, type, os, osVersion, udid, remoteURL);
+        setProxyPort(proxyPort);
+    }
+	
 	public Device(RemoteDevice remoteDevice)
 	{
 		setName(remoteDevice.getName());
@@ -79,6 +85,7 @@ public class Device extends RemoteDevice
 		setOsVersion(remoteDevice.getOsVersion());
 		setUdid(remoteDevice.getUdid());
 		setRemoteURL(remoteDevice.getRemoteURL());
+        setProxyPort(remoteDevice.getProxyPort());
 	}
 	
 	public Device(Capabilities capabilities)

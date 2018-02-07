@@ -292,9 +292,6 @@ public final class DriverPool {
 			try {
 				LOGGER.debug("initDriver start...");
 				
-				//TODO: move browsermob startup to this location
-				ProxyPool.startProxy();
-
 				drv = DriverFactory.create(name, device, capabilities, seleniumHost);
 				registerDriver(drv, name);
 
@@ -308,6 +305,9 @@ public final class DriverPool {
 				if (!device.isNull()) {
 					NDC.push(" [" + device.getName() + "] ");
 				}
+				
+//			    moved proxy start logic here since device will be initialized here only				
+                ProxyPool.startProxy(device.getProxyPort());
 
 				LOGGER.debug("initDriver finish...");
 				
