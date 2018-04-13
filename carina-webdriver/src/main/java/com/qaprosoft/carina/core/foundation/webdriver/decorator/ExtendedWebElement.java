@@ -330,32 +330,21 @@ public class ExtendedWebElement {
      * Click on element.
      */
     public void click() {
-        click(EXPLICIT_TIMEOUT);
-    }
-
-    /**
-     * Click on element.
-     *
-     * @param timeout to wait
-     */
-    public void click(long timeout) {
-    	assertElementPresent(timeout);
-    	captureElements();
-    	
-    	
-    	Timer.start(CORE_OPERATIONS.CLICK);
+        captureElements();
+        
+        Timer.start(CORE_OPERATIONS.CLICK);
         try {
             getElement().click();
         } catch (UnhandledAlertException e) {
-        	//TODO: think about removal for this alert as not very popular anymore
+            //TODO: think about removal for this alert as not very popular anymore
             LOGGER.debug(e.getMessage(), e.getCause());
             getDriver().switchTo().alert().accept();
             getElement().click();
         } catch (StaleElementReferenceException e) {
-        	LOGGER.debug("catched StaleElementReferenceException: ", e);
-        	// analyze if it StaleObjectException and try to find again using driver
-        	element = findStaleElement(getBy(), 1);
-    		element.click();
+            LOGGER.debug("catched StaleElementReferenceException: ", e);
+            // analyze if it StaleObjectException and try to find again using driver
+            element = findStaleElement(getBy(), 1);
+            element.click();
         } catch (Throwable e) {
             LOGGER.error(e.getMessage(), e);
             String msg = Messager.ELEMENT_NOT_CLICKED.error(getNameWithLocator());
@@ -367,6 +356,16 @@ public class ExtendedWebElement {
         String msg = Messager.ELEMENT_CLICKED.info(getName());
         //TODO: move screenshoting outside of class
         Screenshot.capture(getDriver(), msg);
+    }
+
+    /**
+     * Click on element with assertion
+     *
+     * @param timeout to wait
+     */
+    public void click(long timeout) {
+        assertElementPresent(timeout);
+    	    click();
     }
 
     /**
@@ -905,7 +904,7 @@ public class ExtendedWebElement {
                 }
             }
             s.selectByVisibleText(fullTextValue);
-        	isSelected = true;
+        	    isSelected = true;
         } catch (Throwable e) {
             LOGGER.error(e.getMessage(), e);
             String msg = Messager.SELECT_BY_TEXT_NOT_PERFORMED.error(getNameWithLocator());
